@@ -72,7 +72,7 @@ class BMS:
         rowHeader, rowContents = row.split(":")
         laneInfo = int(rowHeader[4:6])
         notesInRow = []
-        if laneInfo in Lane: #레인에 대한 정보라면
+        if laneInfo in  [l.value for l in Lane]: #레인에 대한 정보라면
             for i in range(0, len(rowContents[:-1]),2):
                 notesInRow.append(rowContents[:-1][i:i+2]) #일단 2개씩 도막내서 저장
             grid = len(notesInRow)
