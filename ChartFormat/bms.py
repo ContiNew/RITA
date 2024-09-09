@@ -40,6 +40,7 @@ class BMS:
         if flag is None : raise NotSupportedException
 
     def extractToPandas(self)->pd.DataFrame:
+        '''수집된 데이터를 판다스 데이터 프레임으로 변환'''
         sortedNoteInfoList = sorted(self.noteInfoList,key=lambda l:l[0]) #timestamp 순으로 오름차 정렬
         dataframe = pd.DataFrame(sortedNoteInfoList,columns=("timestamp","beatstamp", "barNum", "location", "laneInfo", "measure","note"))
         return dataframe
@@ -154,8 +155,6 @@ class BMS:
     def close(self):
         self.file.close()
 
-        
-                
             
 class NotSupportedException(Exception):  # 처리불가능한 BMS 파일 처리용
     def __str__(self) -> str:
