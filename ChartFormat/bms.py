@@ -23,6 +23,8 @@ class BMS:
         except UnicodeDecodeError:
             self.file = open(filename, "rt", encoding='shift-jis') 
 
+        self.isRead = False
+
         self.findUnableRow(";")
         self.findUnableRow("#LNTYPE")
         self.findUnableRow("#LNOBJ")
@@ -51,6 +53,7 @@ class BMS:
             read_res = self.readOneBar()
             if read_res is None:
                 break      
+        self.isRead = True
     
     def readOneBar(self)->dict|None:
         ''' 마디 하나를 읽는 함수 '''
