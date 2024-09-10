@@ -2,6 +2,7 @@ import ChartFormat.bms as bms
 import numpy as np
 import pandas as pd
 
+LANE_ORDER = ["16","11","12","13","14","15","18","19"]
 
 class ChartMatrix:
     def __init__(self, chart:bms.BMS):
@@ -28,13 +29,13 @@ class ChartMatrix:
         # 차트 데이터 프레임을 그리드와 합치기 위한 Form으로 바꿔줌
         merged_df = pd.merge(grid, df, on='beatstamp', how='left').fillna(0)
         
-        for col in merged_df.columns:
-            if '_x' in col and col.replace('_x', '_y') in merged_df.columns:
-                merged_df[col.replace('_x', '')] = merged_df[col].fillna(0) + merged_df[col.replace('_x', '_y')].fillna(0)
-                merged_df.drop([col, col.replace('_x', '_y')], axis=1, inplace=True)
+        for col in merged_df.filter(like='_x').columns:
+            merged_df[col.replace('_x', '')] = merged_df[col].add(merged_df[col.replace('_x', '_y')], fill_value=0)
+            merged_df.drop([col, col.replace('_x', '_y')], axis=1, inplace=True)
 
         merged_df.set_index('beatstamp', inplace=True)
-        merged_df = merged_df.astype(int)      
+        merged_df = merged_df.astype(int)
+        merged_df = merged_df[LANE_ORDER] # 인게임에서의 순서대로 열정렬.      
         return (merged_df, min_diff)
         
         
