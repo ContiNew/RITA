@@ -30,7 +30,7 @@ class ChartMatrix:
         merged_df = pd.merge(grid, df, on='beatstamp', how='left').fillna(0)
         
         for col in merged_df.filter(like='_x').columns:
-            merged_df[col.replace('_x', '')] = merged_df[col].add(merged_df[col.replace('_x', '_y')], fill_value=0)
+            merged_df[col.replace('_x', '')] = merged_df[col.replace('_x', '_y')]
             merged_df.drop([col, col.replace('_x', '_y')], axis=1, inplace=True)
 
         merged_df.set_index('beatstamp', inplace=True)
