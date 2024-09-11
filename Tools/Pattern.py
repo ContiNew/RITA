@@ -7,7 +7,7 @@ LANE_ORDER = ["16","11","12","13","14","15","18","19"]
 class ChartMatrix:
     def __init__(self, chart:bms.BMS):
         self.chartMatrix, self.min_dist = self.chartToMatrix(chart)
-        
+        self.numpy = self.chartMatrix.to_numpy() #넘파이 배열로 변환저장
         
     def chartToMatrix(self,chart:bms.BMS)-> tuple[pd.DataFrame, float]:
         if not chart.isRead: chart.readAll(); chart.close()

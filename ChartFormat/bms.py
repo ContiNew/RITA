@@ -54,6 +54,7 @@ class BMS:
             if read_res is None:
                 break      
         self.isRead = True
+        self.close()
     
     def readOneBar(self)->dict|None:
         ''' 마디 하나를 읽는 함수 '''
