@@ -11,6 +11,7 @@ class ChartMatrix:
         self.numpy = self.chartMatrix.to_numpy() #넘파이 배열로 변환저장
         
     def chartToMatrix(self,chart:bms.BMS)-> tuple[pd.DataFrame, float]:
+        '''채보를 행렬로 바꿔줌 (기준은 minimum beat distance)'''
         if not chart.isRead: chart.readAll(); chart.close()
         df = chart.extractToPandas()
 
@@ -36,7 +37,12 @@ class ChartMatrix:
 
         merged_df.set_index('beatstamp', inplace=True)
         merged_df = merged_df.astype(int)
-        merged_df = merged_df[LANE_ORDER] # 인게임에서의 순서대로 열정렬.      
+        try:
+            merged_df = merged_df[LANE_ORDER] # 인게임에서의 순서대로 열정렬.
+        except KeyError:
+            missed_cols = [col for col in LANE_ORDER if col not in merged_df.columns]
+            for col in missed_cols:
+                merged_df[col] = 0  # 해당 열을 추가하고 0으로 채움
         return (merged_df, min_diff)
         
         
@@ -46,10 +52,12 @@ def extract_patterns_with_convolution(cm:ChartMatrix,pHeight:int=4, pWidth:int=7
     pass
     
 
-def extract_patterns_with_flex_window(cm:ChartMatrix,pHeight:int=4, slide:int=1)->list[dict]:
-    '''패턴 행렬, 패턴의 길이, 그리드 슬라이드를 입력받아 수집된 패턴의 리스트를 반환'''
+def extract_patterns_with_flex_window(cm:ChartMatrix,pHeight:int=4, slide:int=1, externalList:list=None)->list[dict]:
+    '''패턴 행렬, 패턴의 길이, 그리드 슬라이드를 입력받아 수집된 패턴의 리스트를 반환(외부에서 받을 수도 있음)'''
     matrix = cm.numpy.copy()
-    sub_matrice = []
+    if externalList is None : sub_matrice = []
+    else: sub_matrice = externalList
+
     for i in range(0, len(matrix)-pHeight,slide):
         c_matrix = matrix[i:i+pHeight].copy() # 후보 매트릭스 추출
         left_boader = {"lane": 0, "modified": False}
@@ -76,6 +84,7 @@ def extract_patterns_with_flex_window(cm:ChartMatrix,pHeight:int=4, slide:int=1)
     return sub_matrice
 
 def is_equal_pattern_in_list(l:list, target_pattern:np.ndarray)->bool:
+    '''리스트 안에 추출한 패턴과 같은 모양의 패턴이 있는지 확인하는 함수'''
     res = False
     for i in range(len(l)):
         if np.array_equal(l[i]["pattern"],target_pattern): 

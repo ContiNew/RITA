@@ -14,14 +14,13 @@ class Lane(Enum):
     SEVEN = 19
 
 
-
 class BMS:
     def __init__(self,filename:str, encode:str='utf-8'):
         ''' 생성자 함수, BMS 파일을 열고 메타데이터를 저장 '''
         try:
             self.file = open(filename, "rt", encoding=encode)
         except UnicodeDecodeError:
-            self.file = open(filename, "rt", encoding='shift-jis') 
+            self.file = open(filename, "rt", encoding='shift-jis')
 
         self.isRead = False
 
@@ -50,22 +49,24 @@ class BMS:
 
     def readAll(self):
         ''' 마디 전체를 읽는 함수 '''
+        prevBar=0
         while True:
-            read_res = self.readOneBar()
+            read_res = self.readOneBar(prevBar)
             if read_res is None:
-                break      
+                break 
+            prevBar = read_res["bar"]     
         self.isRead = True
         self.close()
     
-    def readOneBar(self)->dict|None:
+    def readOneBar(self,prevBar:int)->dict|None:
         ''' 마디 하나를 읽는 함수 '''
         IsNoteAdded = False
         measure = self.findMeasureChange() # 우선 박자가 바뀌었는지를 체크
         curRow = self.seekRowRE(r"^#[0-9]+:")
         if curRow is None: return None # 이 이상 읽을 수 없으므로
         else: curBar = self.getBarFromRow(curRow)
+        self.fillSkipedBeats(prevBar,curBar) # 스킵된 마디에 대해 박자삽입
         self.measure_list.append(measure) # 알아낸 박자를 삽입
-
         while re.match(r"^#[0-9]+:", curRow): # 마디가 바뀌기 전까지 수행
             flag = self.extractInfoFromRow(curBar,curRow)
             if flag == True: IsNoteAdded = True
@@ -99,6 +100,13 @@ class BMS:
             return True
         else:
             return False
+        
+    def fillSkipedBeats(self,prevBar:int,curBar:int):
+        '''아예 언급이 없는 마디의 경우 마지막으로 기록된 박자로 대신 기록해주는 함수'''
+        skip_count = curBar-prevBar
+        if skip_count > 1:
+            lastBeat = self.measure_list[-1]
+            for _ in range(skip_count-1): self.measure_list.append(lastBeat) 
     
     def getBarFromRow(self,row:str)->int:
         return int(row[1:4])
