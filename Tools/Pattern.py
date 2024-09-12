@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 LANE_ORDER = ["16","11","12","13","14","15","18","19"]
+NUM_OF_LANE = 8
 
 class ChartMatrix:
     def __init__(self, chart:bms.BMS):
@@ -40,5 +41,45 @@ class ChartMatrix:
         
         
         
+def extract_patterns_with_convolution(cm:ChartMatrix,pHeight:int=4, pWidth:int=7, rDim:int=2):
+    matrix = cm.numpy.copy()
+    pass
+    
 
+def extract_patterns_with_flex_window(cm:ChartMatrix,pHeight:int=4, slide:int=1)->list[dict]:
+    '''패턴 행렬, 패턴의 길이, 그리드 슬라이드를 입력받아 수집된 패턴의 리스트를 반환'''
+    matrix = cm.numpy.copy()
+    sub_matrice = []
+    for i in range(0, len(matrix)-pHeight,slide):
+        c_matrix = matrix[i:i+pHeight].copy() # 후보 매트릭스 추출
+        left_boader = {"lane": 0, "modified": False}
+        right_boader = {"lane": 7, "modified": False} # 보더 정보 갱신
 
+        for laneNo in range(NUM_OF_LANE): 
+            if left_boader["modified"]== False:
+                for rowNo in range(pHeight): # 후보 매트릭스의 행수 만큼 확인
+                    if c_matrix[rowNo, laneNo] != 0:
+                        left_boader["lane"] = laneNo
+                        left_boader["modified"] = True
+            if right_boader["modified"]== False:
+                for rowNo in range(pHeight): # 후보 매트릭스의 행수 만큼 확인
+                    if c_matrix[rowNo, (NUM_OF_LANE-1)-laneNo] != 0:
+                        right_boader["lane"] = (NUM_OF_LANE-1)-laneNo
+                        right_boader["modified"] = True
+            if right_boader["modified"] and left_boader["modified"]: break
+        
+        row_begin = left_boader["lane"];  row_end = right_boader["lane"]
+        c_matrix = c_matrix[:,row_begin:row_end+1]
+        if not is_equal_pattern_in_list(sub_matrice, c_matrix):
+            sub_matrice.append({'pattern':c_matrix,'appearance':1})
+    sub_matrice = sorted(sub_matrice, key=lambda x:x["appearance"], reverse=True)
+    return sub_matrice
+
+def is_equal_pattern_in_list(l:list, target_pattern:np.ndarray)->bool:
+    res = False
+    for i in range(len(l)):
+        if np.array_equal(l[i]["pattern"],target_pattern): 
+            res = True; 
+            l[i]['appearance'] += 1
+            break
+    return res

@@ -41,8 +41,9 @@ class BMS:
         flag = self.seekRow("*---------------------- MAIN DATA FIELD",seekAfterInit=True)
         if flag is None : raise NotSupportedException
 
-    def extractToPandas(self)->pd.DataFrame:
+    def extractToPandas(self)->pd.DataFrame|None:
         '''수집된 데이터를 판다스 데이터 프레임으로 변환'''
+        if not self.isRead: return None
         sortedNoteInfoList = sorted(self.noteInfoList,key=lambda l:l[0]) #timestamp 순으로 오름차 정렬
         dataframe = pd.DataFrame(sortedNoteInfoList,columns=("timestamp","beatstamp", "barNum", "location", "laneInfo", "measure","note"))
         return dataframe
@@ -121,7 +122,6 @@ class BMS:
     def seekRow(self, targetTxt:str, exceptionTxt:str = '', 
                 curTxt:None|str = None, seekAfterInit:bool = False)->str|None:
         ''' 특정 Row로 이동하는 함수 [리턴] : 찾은 행의 텍스트'''
-
         if seekAfterInit: self.file.seek(0) # 초기화후 Row를 찾는 경우
         if curTxt is None: # Curtxt를 넘겨주지 않은 경우 새롭게 readline
             curTxt = self.file.readline()
@@ -133,7 +133,6 @@ class BMS:
     def seekRowRE(self, targetPattern:str|re.Pattern[str], exceptionTxt:str = '', 
                 curTxt:None|str = None, seekAfterInit:bool = False)->str|None:
         ''' 특정 조건의 Row로 이동하는 함수(정규식 활용) [리턴] : 찾은 행의 텍스트'''
-
         if seekAfterInit: self.file.seek(0) # 초기화후 Row를 찾는 경우
         if curTxt is None: # Curtxt를 넘겨주지 않은 경우 새롭게 readline
             curTxt = self.file.readline()
@@ -145,7 +144,6 @@ class BMS:
     def findUnableRow(self, targetTxt:str, exitTxt:str = '', curTxt:None|str = None,
                        seekAfterInit:bool = False, offsetReturn:None|int=None)->int:
         ''' 문제가 있는 Row를 찾는 함수 [리턴]: 돌아갈 오프셋(없을 경우 맨 앞 오프셋)'''
-
         if seekAfterInit: self.file.seek(0) # 초기화후 Row를 찾는 경우
         if curTxt is None: # Curtxt를 넘겨주지 않은 경우 새롭게 readline
             curTxt = self.file.readline()
