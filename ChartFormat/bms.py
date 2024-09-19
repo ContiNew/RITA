@@ -129,7 +129,7 @@ class BMS:
     
     def seekRow(self, targetTxt:str, exceptionTxt:str = '', 
                 curTxt:None|str = None, seekAfterInit:bool = False)->str|None:
-        ''' 특정 Row로 이동하는 함수 [리턴] : 찾은 행의 텍스트'''
+
         if seekAfterInit: self.file.seek(0) # 초기화후 Row를 찾는 경우
         if curTxt is None: # Curtxt를 넘겨주지 않은 경우 새롭게 readline
             curTxt = self.file.readline()
