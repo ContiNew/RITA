@@ -1,16 +1,12 @@
 import pandas as pd
-import os  
+import numpy as np
 import re
 import math
-from enum import Enum
 
 EPSILON = 1e-9  # 허용 오차
-TIMING_POINT_RE = r"^(\d+),(-?\d+(\.\d+)?),(\d+),(\d+),(\d+),(\d+),(0|1),(\d+)$"
 #time,beatLength,meter,sampleSet,sampleIndex,volume,uninherited,effects
 # uninherited의 경우 슬라이더 속도에만 영향을 끼치므로 무시.
-HIT_OBJECT_RE = r"^(\d+),(\d+),(\d+),(\d+),(\d+),([^,]*),([^:]*(?::[^:]*)*)$"
 #x,y,time,type,hitSound,objectParams,hitSample
-LONG_NOTE_RE = r"^\d+,\d+,\d+,\d+,\d+,\d+:[^:]*(?::[^:]*)*$"
 
 class OSU:
     def __init__(self,filename:str, encode:str='utf-8', key_only:int|None=None) -> None:
@@ -23,10 +19,14 @@ class OSU:
         self.AUDIO_LEAD_IN = self.getAudioLeadIn()
         self.timingInfo = self.getTimingInfo()
         if not key_only is None and self.LANES != key_only:  raise NotSupportedException # 특정 키만을 수집하는 경우
-        if self.checkLongNoteExist(): raise NotSupportedException # 롱노트 미지원
         if self.checkBPMChange() : raise NotSupportedException # 변속 미지원
-        noteInfo = self.getNoteInfo()
-        
+        self.noteInfo = self.getNoteInfo()
+
+    def extractToPandas(self)->pd.DataFrame|None:
+        '''수집된 데이터를 판다스 데이터 프레임으로 변환'''
+        sortedNoteInfoList = sorted(self.noteInfo,key=lambda l:l["timestamp"]) #timestamp 순으로 오름차 정렬
+        dataframe = pd.DataFrame(sortedNoteInfoList,columns=("timestamp","beatstamp", "lane"))
+        return dataframe
 
     def getAudioLeadIn(self):
         """ 음악이 시작되기전의 ms를 가져오는 함수 """
@@ -51,8 +51,8 @@ class OSU:
         info_list = []
         curTxt = self.seekRow("[TimingPoints]") # 타이밍 포인트까지 오프셋을 당기고
         while True:
-            curTxt = self.seekRowRE(TIMING_POINT_RE)
-            if curTxt is None: break
+            curTxt = self.file.readline().strip()
+            if curTxt=="": break
             curTxt = curTxt.split(",")
             if int(curTxt[-2]) == 0: continue #uninherit 여부 검증
             begin_ms = int(curTxt[0]) # 섹션 시작 지점
@@ -67,26 +67,26 @@ class OSU:
         info_list = []
         curTxt = self.seekRow("[HitObjects]") # 히트 오브젝트까지 당기고 시작
         while True:
-            curTxt = self.seekRowRE(HIT_OBJECT_RE)
-            if curTxt is None: break
+            curTxt = self.file.readline().strip()
+            if curTxt=="": break
             curTxt = curTxt.split(",")
-            info_list.append(self.getNoteInfo(curTxt))
+            info_list.append(self.makeNoteInfoItem(curTxt))
         return info_list
     
-
     def makeNoteInfoItem(self,row:list)->list[dict]:
         """ 노트 행을 분리하여 정리하는 함수 """
         x = math.floor(int(row[0]) * self.LANES / 512) # 레인 정보를 가져옴
-        time = int(row[2]) - self.AUDIO_LEAD_IN # 공백을 배재하고 보자.
-        return {"lane":x, "timestamp":time }
+        time = int(row[2]) # 공백을 배재하고 보자.
+        return {"timestamp":time, "beatstamp":self.getBeatStamp(time),"lane":x }
+
+    def getBeatStamp(self,time:int, unit:float=0.0625)->float: #최소그리드 단위는 64분음표(1: 4분음표 기준)
+        """ 비트스탬프를 가져오는 함수 """
+        time = time-self.timingInfo[0]["begin"] # 박자가 없는 공백을 기준으로 생각한다.
+        beatstamp = time/self.timingInfo[0]["spb"] # 어차피 변속을 볼 수 없으므로
+        beatstamp = round(beatstamp/unit)*unit # 가장 가까운 64분 음표 지점으로 보정한다.
+        return beatstamp
     
-    def checkLongNoteExist(self)->bool:
-        """ 롱노트가 있는지 체크함."""
-        offset = self.file.tell()
-        curTxt = self.seekRowRE(LONG_NOTE_RE)
-        offset = self.file.seek(offset)
-        if not curTxt is None: return False
-        else: return True
+    
 
     def checkBPMChange(self)->bool:
         """ 변속이 있는지 체크함 """
@@ -96,7 +96,6 @@ class OSU:
             if abs(prev_spb - item["spb"]) > EPSILON: return True #오차범위 보다 큰 경우 참을 리턴
         return False 
     
-
 
     def seekRow(self, targetTxt:str, exceptionTxt:str = '', 
                 curTxt:None|str = None, seekAfterInit:bool = False)->str|None:
@@ -120,9 +119,6 @@ class OSU:
             curTxt = self.file.readline() # 해당 텍스트가 나오기까지 오프셋을 미룬다
         return curTxt # 찾은 row의 텍스트를 리턴한다 
     
-
-
-
 
 class NotSupportedException(Exception):  # 처리불가능한 BMS 파일 처리용
     def __str__(self) -> str:
