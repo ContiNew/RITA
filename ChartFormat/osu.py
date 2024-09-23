@@ -25,7 +25,7 @@ class OSU:
     def extractToPandas(self)->pd.DataFrame|None:
         '''수집된 데이터를 판다스 데이터 프레임으로 변환'''
         sortedNoteInfoList = sorted(self.noteInfo,key=lambda l:l["timestamp"]) #timestamp 순으로 오름차 정렬
-        dataframe = pd.DataFrame(sortedNoteInfoList,columns=("timestamp","beatstamp", "lane"))
+        dataframe = pd.DataFrame(sortedNoteInfoList,columns=("timestamp","beatstamp", "lane","isLongNote","endtime","endbeat"))
         return dataframe
 
     def getAudioLeadIn(self):
@@ -77,11 +77,22 @@ class OSU:
         """ 노트 행을 분리하여 정리하는 함수 """
         x = math.floor(int(row[0]) * self.LANES / 512) # 레인 정보를 가져옴
         time = int(row[2]) # 공백을 배재하고 보자.
-        return {"timestamp":time, "beatstamp":self.getBeatStamp(time),"lane":x }
+        endTime = -1; isLongNote = False
+        if int(row[3])==(1<<7): # 롱노트인 경우 type이 7이다.(비트 마스킹)
+            endTime = int(row[5].split(":")[0])
+            isLongNote = True
+        return {"timestamp":time, "beatstamp":self.getBeatStamp(time),"lane":x, 
+                "isLongNote": isLongNote, "endtime": endTime, 
+                "endbeat":self.getBeatStamp(endTime) if endTime != -1 else None}
 
     def getBeatStamp(self,time:int, unit:float=0.0625)->float: #최소그리드 단위는 64분음표(1: 4분음표 기준)
         """ 비트스탬프를 가져오는 함수 """
-        time = time-self.timingInfo[0]["begin"] # 박자가 없는 공백을 기준으로 생각한다.
+        time = (
+            time-self.timingInfo[0]["begin"] 
+            if self.AUDIO_LEAD_IN >= self.timingInfo[0]["begin"] 
+            else time-self.AUDIO_LEAD_IN
+        )
+        # 박자가 없는 공백을 기준으로 생각한다.
         beatstamp = time/self.timingInfo[0]["spb"] # 어차피 변속을 볼 수 없으므로
         beatstamp = round(beatstamp/unit)*unit # 가장 가까운 64분 음표 지점으로 보정한다.
         return beatstamp

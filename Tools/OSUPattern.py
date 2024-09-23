@@ -13,10 +13,16 @@ class ChartMatrix:
         '''채보를 행렬로 바꿔줌 (기준은 minimum beat distance)'''
         df = chart.extractToPandas()
         beatstamps = df['beatstamp'].sort_values().unique()
+        beatstampsEnds = df['endbeat'].sort_values().unique()
+
+
         min_diff = np.diff(beatstamps).min() # 노트간 최소 비트 거리
 
-        min_beatstamp = beatstamps.min()
-        max_beatstamp = beatstamps.max()
+        min_beatstamp = beatstamps.min() 
+        max_beatstamp = beatstamps.max() \
+            if beatstamps.max() >= np.nanmax(beatstampsEnds)\
+            else np.nanmax(beatstampsEnds)
+
         beatstamp_points = np.arange(min_beatstamp, max_beatstamp + min_diff, min_diff)
         # 비트 스탬프 그리드를 위한 Point 생성
 
@@ -24,26 +30,19 @@ class ChartMatrix:
         for lane in df['lane'].unique(): grid[lane] = 0
         # 포인트로 그리드 생성 및 그리드 완성
 
-        df = df.pivot_table(index='beatstamp', columns='lane', aggfunc='size', fill_value=0).reset_index()
-        # 차트 데이터 프레임을 그리드와 합치기 위한 Form으로 바꿔줌
-        merged_df = pd.merge(grid, df, on='beatstamp', how='left').fillna(0)
-        
-        for col in merged_df.filter(like='_x').columns:
-            merged_df[col.replace('_x', '')] = merged_df[col.replace('_x', '_y')]
-            merged_df.drop([col, col.replace('_x', '_y')], axis=1, inplace=True)
-
-        merged_df.set_index('beatstamp', inplace=True)
-        merged_df = merged_df.astype(int)
-        try:
-            merged_df = merged_df[self.LANE_ORDER] # 인게임에서의 순서대로 열정렬.
-        except KeyError:
-            missed_cols = [col for col in self.LANE_ORDER if col not in merged_df.columns]
-            for col in missed_cols:
-                merged_df[col] = 0  # 해당 열을 추가하고 0으로 채움
-
-        merged_df[merged_df>=2]=1
-
-        return (merged_df, min_diff)
+        for index, row in df.iterrows():
+            start_stamp = row['beatstamp']
+            lane = row['lane']
+            if row['isLongNote']:
+                end_stamp = row['endbeat'] if not pd.isna(row['endbeat']) else start_stamp
+                # 그리드에서 해당 범위에 값 기록
+                grid.loc[(grid['beatstamp'] == start_stamp), lane] = 1  # 시작점 1
+                grid.loc[(grid['beatstamp'] == end_stamp), lane] = 1    # 끝점 1
+                grid.loc[(grid['beatstamp'] > start_stamp) & (grid['beatstamp'] < end_stamp), lane] = 0.5  # 중간 값 0.5
+            else:
+                grid.loc[(grid['beatstamp'] == start_stamp), lane] = 1  # 단일 노트 1 기록
+        grid = grid.drop(columns=['beatstamp'])
+        return (grid, min_diff)
     
 def is_equal_pattern_in_list(l:list, target_pattern:np.ndarray)->bool:
     '''리스트 안에 추출한 패턴과 같은 모양의 패턴이 있는지 확인하는 함수'''
@@ -64,7 +63,7 @@ def extract_patterns_from_note_start_w_flex_window(cm:ChartMatrix,pHeight:int=4,
     while ps < len(matrix):
         c_matrix = matrix[ps:ps+pHeight].copy() # 후보 매트릭스 추출
         left_boader = {"lane": 0, "modified": False}
-        right_boader = {"lane": 7, "modified": False} # 보더 정보 갱신
+        right_boader = {"lane": cm.NUM_OF_LANE-1, "modified": False} # 보더 정보 갱신
 
         for laneNo in range(cm.NUM_OF_LANE): 
             if left_boader["modified"]== False:
@@ -87,7 +86,7 @@ def extract_patterns_from_note_start_w_flex_window(cm:ChartMatrix,pHeight:int=4,
 
         while ps < len(matrix):
             ps += 1
-            if ps >= len(matrix) or not (matrix[ps, :] == 0).all():
+            if ps >= len(matrix) or np.any(matrix[ps, :] == 1):
                 break
 
     sub_matrice = sorted(sub_matrice, key=lambda x:x["appearance"], reverse=True)
