@@ -86,8 +86,6 @@ class OSU:
         beatstamp = round(beatstamp/unit)*unit # 가장 가까운 64분 음표 지점으로 보정한다.
         return beatstamp
     
-    
-
     def checkBPMChange(self)->bool:
         """ 변속이 있는지 체크함 """
         prev_spb = None
