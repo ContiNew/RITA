@@ -141,3 +141,23 @@ def extract_patterns_from_note_start_w_flex_window(cm:ChartMatrix,pHeight:int=4,
 
     sub_matrice = sorted(sub_matrice, key=lambda x:x["appearance"], reverse=True)
     return sub_matrice
+
+
+def extract_patterns_from_note_start_w_fixed_window(cm:ChartMatrix,pHeight:int=4, externalList:list=None)->list[dict]:
+    ''' 세로 길이만을 고려해서 차트의 일부를 잘라 패턴으로 수집하는 함수 '''
+    matrix = cm.numpy.copy()
+    if externalList is None : sub_matrice = []
+    else: sub_matrice = externalList
+
+    ps = 0 #pattern start
+    while ps < len(matrix):
+        c_matrix = matrix[ps:ps+pHeight].copy() # 후보 매트릭스 추출
+        if not is_equal_pattern_in_list(sub_matrice, c_matrix):
+            sub_matrice.append({'pattern':c_matrix,'appearance':1})
+
+        while ps < len(matrix):
+            ps += 1
+            if ps >= len(matrix) or not (matrix[ps, :] == 0).all():
+                break
+    sub_matrice = sorted(sub_matrice, key=lambda x:x["appearance"], reverse=True)
+    return sub_matrice

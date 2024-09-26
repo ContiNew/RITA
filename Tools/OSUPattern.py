@@ -14,20 +14,21 @@ class ChartMatrix:
         df = chart.extractToPandas()
         beatstamps = df['beatstamp'].sort_values().unique()
         beatstampsEnds = df['endbeat'].sort_values().unique()
+        maxOfLNBeat = 0 if np.nanmax(beatstampsEnds) is None else np.nanmax(beatstampsEnds)
 
 
         min_diff = np.diff(beatstamps).min() # 노트간 최소 비트 거리
 
         min_beatstamp = beatstamps.min() 
         max_beatstamp = beatstamps.max() \
-            if beatstamps.max() >= np.nanmax(beatstampsEnds)\
-            else np.nanmax(beatstampsEnds)
+            if beatstamps.max() >= maxOfLNBeat\
+            else maxOfLNBeat
 
         beatstamp_points = np.arange(min_beatstamp, max_beatstamp + min_diff, min_diff)
         # 비트 스탬프 그리드를 위한 Point 생성
 
         grid = pd.DataFrame(beatstamp_points, columns=['beatstamp'])
-        for lane in df['lane'].unique(): grid[lane] = 0
+        for lane in df['lane'].unique(): grid[lane] = 0.0
         # 포인트로 그리드 생성 및 그리드 완성
 
         for index, row in df.iterrows():
@@ -41,6 +42,7 @@ class ChartMatrix:
                 grid.loc[(grid['beatstamp'] > start_stamp) & (grid['beatstamp'] < end_stamp), lane] = 0.5  # 중간 값 0.5
             else:
                 grid.loc[(grid['beatstamp'] == start_stamp), lane] = 1  # 단일 노트 1 기록
+
         grid = grid.drop(columns=['beatstamp'])
         return (grid, min_diff)
     

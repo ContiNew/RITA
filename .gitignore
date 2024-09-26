@@ -1,8 +1,11 @@
 __pycache__
 collect_patterns.py
+collect_patterns_osu.py
 collect_patterns_fixed.py
 collect_patterns_from_notes.py
+visuallize_patterns.py
 check.py
 test.py
 test2.py
 test3.py
+collect_patterns_from_notes_fixed.py

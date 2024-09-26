@@ -17,6 +17,7 @@ class OSU:
             self.file = open(filename, "rt", encoding='shift-jis')
         self.LANES = self.getLanes()
         self.AUDIO_LEAD_IN = self.getAudioLeadIn()
+        if not self.isManiaChart(): raise NotSupportedException # 마니아 채보 아님.
         self.timingInfo = self.getTimingInfo()
         if not key_only is None and self.LANES != key_only:  raise NotSupportedException # 특정 키만을 수집하는 경우
         if self.checkBPMChange() : raise NotSupportedException # 변속 미지원
@@ -45,6 +46,16 @@ class OSU:
             return None
         Lanes = int(curTxt.split(":")[1])
         return Lanes
+    
+    def isManiaChart(self)->bool:
+        """레인 정보를 들고옴"""
+        curTxt = self.seekRow("[General]")
+        curTxt = self.seekRow("Mode")
+        self.file.seek(0) 
+        if curTxt is None:
+            return False
+        if int(curTxt.split(':')[1]) != 3: return False
+        else: return True
 
     def getTimingInfo(self)->list:
         """ 타이밍 정보를 가져오는 함수 """
