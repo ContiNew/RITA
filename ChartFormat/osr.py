@@ -55,6 +55,7 @@ class OSUReplay:
             'max_combo': max_combo,
             'full_combo': full_combo,
             'score': score,
+            'life_bar_report':life_bar_report,
             'mod_used': mod_used,
             'timestamp': timestamp,
             'replay_data': replay_data,
@@ -86,9 +87,13 @@ def read_osr_string(file):
         return file.read(length).decode('utf-8')
     return None
 
-
+"""
+import json
 if __name__ == "__main__":
     example = OSUReplay('E:/osu for research/Replays/hyeon365 - KARUT - Shooting Athletes [Easy] (2024-09-26) OsuMania.osr')
-    print("example of replay data")
-    for row in example.content["replay_data"][:10]:
-        print(row)
+    #f_dict = {k: v for k, v in example.content.items() if k not in ['replay_data', 'life_bar_report']}
+    #print(json.dumps(f_dict, indent=4))
+    print("life_bar_report: ")
+    for r in example.content["life_bar_report"][:10]:
+        print(r)
+"""
