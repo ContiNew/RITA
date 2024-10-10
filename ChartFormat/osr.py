@@ -1,5 +1,6 @@
 import struct
 import lzma
+import pandas as pd
 
 class OSUReplay:
     def __init__(self,path:str) -> None:
@@ -61,6 +62,10 @@ class OSUReplay:
             'replay_data': replay_data,
             'online_replay_id': online_id,
             }
+    def getLifeBarReport(self):
+        return pd.DataFrame(self.content["life_bar_report"])
+    def getReplayData(self):
+        return pd.DataFrame(self.content["replay_data"])
 
 
 def read_uleb128(file):
@@ -87,13 +92,5 @@ def read_osr_string(file):
         return file.read(length).decode('utf-8')
     return None
 
-"""
-import json
-if __name__ == "__main__":
-    example = OSUReplay('E:/osu for research/Replays/hyeon365 - KARUT - Shooting Athletes [Easy] (2024-09-26) OsuMania.osr')
-    #f_dict = {k: v for k, v in example.content.items() if k not in ['replay_data', 'life_bar_report']}
-    #print(json.dumps(f_dict, indent=4))
-    print("life_bar_report: ")
-    for r in example.content["life_bar_report"][:10]:
-        print(r)
-"""
+
+
