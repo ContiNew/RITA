@@ -17,6 +17,7 @@ class OSU:
             self.file = open(filename, "rt", encoding='shift-jis')
         self.LANES = self.getLanes()
         self.AUDIO_LEAD_IN = self.getAudioLeadIn()
+        self.OVERALL_DIFFICULTY = self.getOverallDificulty()
         if not self.isManiaChart(): raise NotSupportedException # 마니아 채보 아님.
         self.timingInfo = self.getTimingInfo()
         if not key_only is None and self.LANES != key_only:  raise NotSupportedException # 특정 키만을 수집하는 경우
@@ -37,6 +38,15 @@ class OSU:
             return None
         audioLeadIn = int(curTxt.split(":")[1])
         return audioLeadIn
+    
+    def getOverallDificulty(self):
+        """ 판정 난이도를 가져오는 함수 """
+        curTxt = self.seekRow("OverallDifficulty")
+        self.file.seek(0) 
+        if curTxt is None:
+            return None
+        OverallDificulty = float(curTxt.split(":")[1])
+        return OverallDificulty
     
     def getLanes(self)->int:
         """레인 정보를 들고옴"""
