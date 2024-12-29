@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 import math
+from fractions import Fraction
 
 EPSILON = 1e-9  # 허용 오차
 #time,beatLength,meter,sampleSet,sampleIndex,volume,uninherited,effects
@@ -21,7 +22,7 @@ class OSU:
         if not self.isManiaChart(): raise NotSupportedException # 마니아 채보 아님.
         self.timingInfo = self.getTimingInfo()
         if not key_only is None and self.LANES != key_only:  raise NotSupportedException # 특정 키만을 수집하는 경우
-        if self.checkBPMChange() : raise NotSupportedException # 변속 미지원
+        if self.checkBPMChange() : pass #raise NotSupportedException # 변속 미지원
         self.noteInfo = self.getNoteInfo()
 
     def extractToPandas(self)->pd.DataFrame|None:

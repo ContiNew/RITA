@@ -1,6 +1,7 @@
 import ChartFormat.bms as bms
 import numpy as np
 import pandas as pd
+from fractions import Fraction
 
 LANE_ORDER = ["16","11","12","13","14","15","18","19"]
 NUM_OF_LANE = 8
@@ -18,6 +19,15 @@ def pad_matrix_to_h_rows(matrix,h=4):
         matrix = np.vstack((matrix, zero_vectors))
     return matrix
 
+def fraction_arange(start, stop, step): # np.arange 대체용
+    values = []
+    current = start
+    while current <= stop:
+        values.append(current)
+        current += step
+    return values
+
+
 class ChartMatrix:
     def __init__(self, chart:bms.BMS):
         self.chartMatrix, self.min_dist = self.chartToMatrix(chart)
@@ -29,11 +39,12 @@ class ChartMatrix:
         df = chart.extractToPandas()
 
         beatstamps = df['beatstamp'].sort_values().unique()
-        min_diff = np.diff(beatstamps).min() # 노트간 최소 비트 거리
+        fraction_diffs = [beatstamps[i+1] - beatstamps[i] for i in range(len(beatstamps)-1)]
+        min_diff = min(fraction_diffs) # 노트간 최소 비트 거리
 
         min_beatstamp = beatstamps.min()
         max_beatstamp = beatstamps.max()
-        beatstamp_points = np.arange(min_beatstamp, max_beatstamp + min_diff, min_diff)
+        beatstamp_points = fraction_arange(min_beatstamp, max_beatstamp + min_diff, min_diff)
         # 비트 스탬프 그리드를 위한 Point 생성
 
         grid = pd.DataFrame(beatstamp_points, columns=['beatstamp'])

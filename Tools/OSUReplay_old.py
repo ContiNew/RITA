@@ -71,7 +71,7 @@ def denoiseReplay(replayDf:pd.DataFrame)->pd.DataFrame:
 class ReplayAnalyzer:
     @staticmethod
     def matchNotesToReplay(rp:ReplayTable, chart:osu.OSU): # 리플레이의 기록을 실제 노트와 매칭해주는 함수
-        records = rp.table
+        records = rp.getReducedTable()
         chart_df = chart.extractToPandas()
         mathced_pairs = []
         for idx, row in chart_df.iterrows():
@@ -79,15 +79,14 @@ class ReplayAnalyzer:
                 closest_record = ReplayAnalyzer.getClosestRecordLN(row,records,\
                                                                 audioLeadIn=chart.AUDIO_LEAD_IN,\
                                                                     overallDifficulty= chart.OVERALL_DIFFICULTY)
-
                 mathced_pairs.append({"target_timestamp":row["timestamp"]+chart.AUDIO_LEAD_IN, \
                                 "recorded_timestamp":closest_record[0][1], \
-                                "interval": closest_record[0][1]-(row["timestamp"]+chart.AUDIO_LEAD_IN),\
+                                "interval": row["timestamp"]+chart.AUDIO_LEAD_IN-closest_record[0][1],\
                                 "lane":row["lane"], "judgement":closest_record[0][2], "isLN":1})
                 if len(closest_record) > 1:
                     mathced_pairs.append({"target_timestamp":row["endtime"]+chart.AUDIO_LEAD_IN, \
                                 "recorded_timestamp":closest_record[1][1], \
-                                "interval": closest_record[1][1]-(row["endtime"]+chart.AUDIO_LEAD_IN),\
+                                "interval": row["endtime"]+chart.AUDIO_LEAD_IN-closest_record[1][1],\
                                 "lane":row["lane"], "judgement":closest_record[1][2], "isLN":2})
             else:
                 closest_record = ReplayAnalyzer.getClosestRecord(row,records,\
@@ -95,10 +94,9 @@ class ReplayAnalyzer:
                                                                     overallDifficulty= chart.OVERALL_DIFFICULTY)
                 mathced_pairs.append({"target_timestamp":row["timestamp"]+chart.AUDIO_LEAD_IN, \
                                 "recorded_timestamp":closest_record[1], \
-                                "interval":closest_record[1]-(row["timestamp"]+chart.AUDIO_LEAD_IN),\
+                                "interval": row["timestamp"]+chart.AUDIO_LEAD_IN-closest_record[1],\
                                 "lane":row["lane"], "judgement":closest_record[2],"isLN":0})
         mathced_records = pd.DataFrame(mathced_pairs)
-        print(rp.table)
         return mathced_records
     
     @staticmethod
@@ -131,84 +129,45 @@ class ReplayAnalyzer:
     @staticmethod
     def getClosestRecord(targetNote, records:pd.DataFrame,audioLeadIn=0,overallDifficulty=0.0):
         #To do: 채보의 타임스탬프를 고려해서 매칭되는 레코드듣을 수집하자.
-        judgement_range = Judgement.BAD.value - 3 * overallDifficulty
-        target_timestamp = targetNote["timestamp"] + audioLeadIn
-        # 판정 범위 내에 있는 레코드 필터링
-        filtered_records :pd.DataFrame = records[
-            (records["timestamp"] >= target_timestamp - judgement_range) &
-            (records["timestamp"] <= target_timestamp + judgement_range)
-        ]
-        if filtered_records.empty:
-            return (-1, -1, "MISS")
-        # 레인 확인 및 후보 수집
-        target_lane = targetNote["lane"]
-        filtered_records = filtered_records.copy()
-        filtered_records["is_valid"] = filtered_records["note_pos"].apply(
-            lambda note_pos: is_bit_set(note_pos, target_lane)
-        )
-        valid_records = filtered_records[filtered_records["is_valid"]]
-        if valid_records.empty:
-            return (-1, -1, "MISS")
-        # 가장 빠른 레코드 선택
-        valid_records = valid_records.copy()
-        valid_records["judgement"] = valid_records.apply(
-            lambda row: ReplayAnalyzer.getRecordJudgement(targetNote, row, audioLeadIn, overallDifficulty),
-            axis=1
-        )
-        closest_record = valid_records.loc[valid_records["timestamp"].idxmin()]
-        return (closest_record.name, closest_record["timestamp"], closest_record["judgement"])
+        candidate = []
+        for idx, row in records.iterrows():
+            if row["timestamp"] > targetNote["timestamp"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: break
+            # 완전 나가버리는 경우에는 해당 노트에 대한 기록이 아니므로(쓸모없는 연산은 더 하지않는다.)
+            if row["timestamp"] <= targetNote["timestamp"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn and\
+               row["timestamp"] >= targetNote["timestamp"]-(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: 
+                # 판정 범위에 들어오는지 확인.
+                target_lane = targetNote["lane"]
+                flag = is_bit_set(row["note_pos"],target_lane) # 레인 위치가 맞는지 확인
+                if flag :  
+                    candidate.append((idx,row["timestamp"],ReplayAnalyzer.getRecordJudgement(targetNote,row,audioLeadIn,overallDifficulty)))
+        if len(candidate) == 0: result = (-1,-1,"MISS")
+        else : result = sorted(candidate, key=lambda x: x[1])[0] # 수집된 레코드중에서 가장 빠른 레코드를 저장.
+        return result
     
     @staticmethod
     def getClosestRecordLN(targetNote, records:pd.DataFrame,audioLeadIn=0,overallDifficulty=0.0):
-        # BAD 판정의 허용 범위 계산
-        judgement_range = Judgement.BAD.value - 3 * overallDifficulty
-        judgement_range_tail_start = Judgement.BAD.value - 3 * overallDifficulty
-        judgement_range_tail_end = Judgement.GOOD.value - 3 * overallDifficulty
-
-        target_start_timestamp = targetNote["timestamp"] + audioLeadIn
-        target_end_timestamp = targetNote["endtime"] + audioLeadIn
-        # 시작 타임스탬프에 대한 필터링
-        start_candidates = records[
-            (records["timestamp"] >= target_start_timestamp - judgement_range) &
-            (records["timestamp"] <= target_end_timestamp + judgement_range_tail_end)
-        ]
-        # 종료 타임스탬프에 대한 필터링
-        end_candidates = records[
-            (records["timestamp"] >= target_end_timestamp - judgement_range_tail_start) &
-            (records["timestamp"] <= target_end_timestamp + judgement_range_tail_end)
-        ]
-        # 후보가 없는 경우 MISS 반환
-        if start_candidates.empty or end_candidates.empty:
-            return ((-1, -1, "MISS"),)
-        # 레인 확인
-        target_lane = targetNote["lane"]
-
-        start_candidates =start_candidates.copy()
-        start_candidates["is_valid"] = start_candidates["note_pos"].apply(
-            lambda note_pos: is_bit_set(note_pos, target_lane)
-        )
-
-        end_candidates = end_candidates.copy()
-        end_candidates["is_valid"] = end_candidates["note_pos"].apply(
-            lambda note_pos: is_bit_set(note_pos, target_lane)
-        )
-        valid_start_candidates = start_candidates[start_candidates["is_valid"]]
-        valid_end_candidates = end_candidates[end_candidates["is_valid"]]
-        # 유효한 시작/종료 후보가 없는 경우 MISS 반환
-        if valid_start_candidates.empty or valid_end_candidates.empty:
-            return ((-1, -1, "MISS"),)
-        # 가장 빠른 시작/종료 후보 선택
-        closest_start = valid_start_candidates.loc[valid_start_candidates["timestamp"].idxmin()]
-        closest_end = valid_end_candidates.loc[valid_end_candidates["timestamp"].idxmax()]
-        # end의 경우 1인 타임스템프의 마지막 부분이 롱노트 입력의 끝이므로 idxmax를 찾는다.
-
-        judgement = ReplayAnalyzer.getRecordJudgementLN(targetNote,closest_start,closest_end,\
-                                                        audioLeadIn,overallDifficulty)
-        return (
-            (closest_start.name, closest_start["timestamp"], judgement),
-            (closest_end.name, closest_end["timestamp"], judgement),
-        )
-        
+        #To do: 채보의 타임스탬프를 고려해서 매칭되는 레코드듣을 수집하자.
+        candidate_s = []
+        candidate_e = []
+        for idx, srow in records.iterrows():
+             if srow["timestamp"] > targetNote["timestamp"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: break
+             if srow["timestamp"] <= targetNote["timestamp"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn and\
+               srow["timestamp"] >= targetNote["timestamp"]-(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: 
+                 #판정범위 안에 들어오는지 확인.
+                for idx, erow in records.iterrows():
+                    if erow["timestamp"] > targetNote["endtime"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: break
+                    if erow["timestamp"] <= targetNote["endtime"]+(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn and\
+                    erow["timestamp"] >= targetNote["endtime"]-(Judgement.BAD.value-3*overallDifficulty)+audioLeadIn: 
+                        target_lane = targetNote["lane"]
+                        sflag = is_bit_set(srow["note_pos"],target_lane) # 레인 위치가 맞는지 확인
+                        eflag = is_bit_set(srow["note_pos"],target_lane) # 레인 위치가 맞는지 확인
+                        if sflag and eflag:
+                           judgement = ReplayAnalyzer.getRecordJudgementLN(targetNote,srow, erow, audioLeadIn,overallDifficulty)
+                           candidate_s.append((idx,srow["timestamp"],judgement))
+                           candidate_e.append((idx,erow["timestamp"],judgement))
+        if len(candidate_s) == 0 or len(candidate_e)==0: result = ((-1,-1,"MISS"),)
+        else : result = (sorted(candidate_s, key=lambda x: x[1])[0] ,sorted(candidate_e, key=lambda x: x[1])[0])# 수집된 레코드중에서 가장 빠른 레코드를 저장.
+        return result
     
     @staticmethod
     def getRecordJudgement(targetNote, record,audioLeadIn=0,overallDifficulty=0.0):
@@ -218,51 +177,47 @@ class ReplayAnalyzer:
         error = abs(targetPoint-recordedPoint)
         if error <= Judgement.PERFECT.value:
             return "PERFECT"
-        if error <= (Judgement.GREAT.value-3*overallDifficulty):
+        if error <=  (Judgement.GREAT.value-3*overallDifficulty):
             return "GREAT"
-        if error <= (Judgement.GOOD.value-3*overallDifficulty):
+        if error <=   (Judgement.GOOD.value-3*overallDifficulty):
             return "GOOD"
-        if error <= (Judgement.OK.value-3*overallDifficulty):
+        if error <=   (Judgement.OK.value-3*overallDifficulty):
             return "OK"
-        if error <= (Judgement.BAD.value-3*overallDifficulty):
+        if error <=    (Judgement.BAD.value-3*overallDifficulty):
             return "BAD"
         return "MISS"
     
 
     @staticmethod
-    def getRecordJudgementLN(targetNote, s_record, e_record, audioLeadIn=0, overallDifficulty=0.0): 
-        # 롱노트 판정을 수행하고 결과를 반환
-        s_target = targetNote["timestamp"] + audioLeadIn
-        e_target = targetNote["endtime"] + audioLeadIn
+    def getRecordJudgementLN(targetNote, s_record, e_record, audioLeadIn=0,overallDifficulty=0.0):
+        #레코드의 판정이 어떤지 판정하고 리턴함.(롱노트용 )
+        s_target = targetNote["timestamp"]+audioLeadIn
+        e_target = targetNote["endtime"]+audioLeadIn
 
         s_recorded = s_record["timestamp"]
         e_recorded = e_record["timestamp"]
 
-        # 오차 계산
-        head_error = abs(s_target - s_recorded)
-        combined_error = head_error + abs(e_target - e_recorded)
+        head_error = abs(s_target-s_recorded)
+        combined_error = head_error + abs(e_target-e_recorded)
 
-        # 각 판정 기준 계산
-        perfect_head = Judgement.PERFECT.value * 1.2
-        perfect_combined = Judgement.PERFECT.value * 2.4
-        great_head = (Judgement.GREAT.value - 3 * overallDifficulty) * 1.1
-        great_combined = (Judgement.GREAT.value - 3 * overallDifficulty) * 2.2
-        good_head = Judgement.GOOD.value - 3 * overallDifficulty
-        good_combined = good_head * 2
-        ok_head = Judgement.OK.value - 3 * overallDifficulty
-        ok_combined = ok_head * 2
-
-        # 판정 비교
-        if head_error <= perfect_head and combined_error <= perfect_combined:
+        if head_error <= Judgement.PERFECT.value* 1.2 and combined_error <= Judgement.PERFECT.value* 2.4:
             return "PERFECT"
-        if head_error <= great_head and combined_error <= great_combined:
+        if head_error <=  (Judgement.GREAT.value-3*overallDifficulty)*1.1\
+            and combined_error <= (Judgement.GREAT.value-3*overallDifficulty)*2.2:
             return "GREAT"
-        if head_error <= good_head and combined_error <= good_combined:
+        if head_error <=  (Judgement.GOOD.value-3*overallDifficulty)\
+            and combined_error <= (Judgement.GOOD.value-3*overallDifficulty)*2:
             return "GOOD"
-        if head_error <= ok_head and combined_error <= ok_combined:
+        if head_error <=  (Judgement.OK.value-3*overallDifficulty)\
+            and combined_error <= (Judgement.OK.value-3*overallDifficulty)*2:
             return "OK"
-        if s_recorded < e_target - (Judgement.BAD.value - 3 * overallDifficulty) or \
-        s_recorded > e_target + ok_head:
+        """
+        if head_error <=  (Judgement.BAD.value-3*overallDifficulty)\
+            and combined_error <= (Judgement.BAD.value-3*overallDifficulty)*2:
+            return "BAD"
+        """
+        if s_recorded < e_target-(Judgement.BAD.value-3*overallDifficulty) and \
+            s_recorded > e_target+(Judgement.OK.value-3*overallDifficulty) :
             return "MISS"
         return "BAD"
                 
